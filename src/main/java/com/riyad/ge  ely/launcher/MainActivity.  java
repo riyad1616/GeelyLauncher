@@ -1,0 +1,111 @@
+package com.riyad.geely.launcher;
+
+import android.os.Bundle;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.viewpager2.widget.ViewPager2;
+import android.car.Car;
+import android.car.hardware.CarPropertyValue;
+import android.car.hardware.property.CarPropertyManager;
+
+public class MainActivity extends AppCompatActivity {
+
+    private ViewPager2 leftViewPager;
+    private View dragDivider;
+    private View rightContainer;
+    private LinearLayout splitMainLayout;
+    private TextView speedDisplay;
+
+    private Car carApiClient;
+    private CarPropertyManager propertyManager;
+    private CarPropertyManager.CarPropertyEventCallback carPropertyCallback;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getWindow().getAttributes().flags |= 0x00800000; 
+        setContentView(R.layout.activity_main);
+
+        splitMainLayout = findViewById(R.id.splitMainLayout);
+        leftViewPager = findViewById(R.id.leftContainerViewPager);
+        dragDivider = findViewById(R.id.dragDivider);
+        rightContainer = findViewById(R.id.rightMapsContainer);
+        speedDisplay = findViewById(R.id.speedDisplay);
+
+        setupInteractiveDivider();
+        initCarSensors();
+    }
+
+    private void setupInteractiveDivider() {
+        dragDivider.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_MOVE) {
+                    float totalWidth = splitMainLayout.getWidth();
+                    float rawX = event.getRawX();
+                    float leftPercentage = (rawX / totalWidth) * 100;
+
+                    if (leftPercentage >= 30 && leftPercentage <= 70) {
+                        float rightPercentage = 100 - leftPercentage;
+
+                        LinearLayout.LayoutParams leftParams = (LinearLayout.LayoutParams) leftViewPager.getLayoutParams();
+                        leftParams.weight = leftPercentage;
+                        leftViewPager.setLayoutParams(leftParams);
+
+                        LinearLayout.LayoutParams rightParams = (LinearLayout.LayoutParams) rightContainer.getLayoutParams();
+                        rightParams.weight = rightPercentage;
+                        rightContainer.setLayoutParams(rightParams);
+                    }
+                    return true;
+                }
+                return true;
+            }
+        });
+    }
+
+    private void initCarSensors() {
+        try {
+            carApiClient = Car.createCar(this);
+            propertyManager = (CarPropertyManager) carApiClient.getCarManager(Car.PROPERTY_SERVICE);
+
+            carPropertyCallback = new CarPropertyManager.CarPropertyEventCallback() {
+                @Override
+                public void onChangeEvent(CarPropertyValue value) {
+                    if (value.getPropertyId() == 291504641) { 
+                        float speedChange = (Float) value.getValue();
+                        int currentSpeed = Math.round(speedChange * 3.6f); 
+                        runOnUiThread(() -> {
+                            if (speedDisplay != null) {
+                                speedDisplay.setText(currentSpeed + " كم/ساعة");
+                            }
+                        });
+                    }
+                }
+
+                @Override
+                public void onErrorEvent(int propertyId, int zone) {}
+            };
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (propertyManager != null && carPropertyCallback != null) {
+            propertyManager.registerCallback(carPropertyCallback, 291504641, 10.0f);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (propertyManager != null && carPropertyCallback != null) {
+            propertyManager.unregisterCallback(carPropertyCallback);
+        }
+    }
+}
