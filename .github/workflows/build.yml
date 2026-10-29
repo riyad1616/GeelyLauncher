@@ -13,44 +13,13 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Build Android APK
+        uses: kevin-david/android-build-action@v1.4
+        with:
+          project-root: '.'
 
-      - name: Fix and Force Build APK
-        run: |
-          echo "rootProject.name = 'GeelyCoolrayLauncher'" > settings.gradle
-          echo "include ':app'" >> settings.gradle
-          mkdir -p app
-          if [ -f build.gradle ] && [ ! -f app/build.gradle ]; then
-            mv build.gradle app/build.gradle
-          fi
-          if [ -d src ] && [ ! -d app/src ]; then
-            mv src app/src
-          fi
-          cat << 'EOF' > build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:7.4.2' }
-          }
-          allprojects {
-              repositories { google(); mavenCentral() }
-          }
-          task clean(type: Delete) { delete rootProject.buildDir }
-          EOF
-          if [ -f app/build.gradle ]; then
-            sed -i 's/version .*/version "7.4.2"/' app/build.gradle || true
-          fi
-          if [ -f gradlew ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug --stacktrace || true
-          else
-            gradle assembleDebug --stacktrace || true
-          fi
-          mkdir -p build/outputs/apk/debug
-          find . -name "*.apk" -exec cp {} build/outputs/apk/debug/geely-launcher.apk \; || touch build/outputs/apk/debug/geely-launcher.apk
-
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: geely-launcher-apk
-          path: build/outputs/apk/debug/*.apk
+          path: "**/*.apk"
